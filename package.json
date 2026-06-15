@@ -23,5 +23,55 @@
   },
   "devDependencies": {
     "typescript": "^5.6.3"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./db": {
+      "types": "./dist/db.d.ts",
+      "import": "./dist/db.js"
+    },
+    "./contracts": {
+      "types": "./dist/contracts.d.ts",
+      "import": "./dist/contracts.js"
+    },
+    "./localKeys": {
+      "types": "./dist/localKeys.d.ts",
+      "import": "./dist/localKeys.js"
+    },
+    "./syncer": {
+      "types": "./dist/syncer.d.ts",
+      "import": "./dist/syncer.js"
+    },
+    "./runtimeConfig": {
+      "types": "./dist/runtimeConfig.d.ts",
+      "import": "./dist/runtimeConfig.js"
+    },
+    "./wagmi": {
+      "types": "./dist/wagmi.d.ts",
+      "import": "./dist/wagmi.js"
+    },
+    "./chain/transactionLayer": {
+      "types": "./dist/chain/transactionLayer.d.ts",
+      "import": "./dist/chain/transactionLayer.js"
+    },
+    "./messenger/writeActions": {
+      "types": "./dist/messenger/writeActions.d.ts",
+      "import": "./dist/messenger/writeActions.js"
+    },
+    "./ipfs/attachmentCache": {
+      "types": "./dist/ipfs/attachmentCache.d.ts",
+      "import": "./dist/ipfs/attachmentCache.js"
+    },
+    "./ipfs/fileCrypto": {
+      "types": "./dist/ipfs/fileCrypto.d.ts",
+      "import": "./dist/ipfs/fileCrypto.js"
+    },
+    "./ipfs/localIpfs": {
+      "types": "./dist/ipfs/localIpfs.d.ts",
+      "import": "./dist/ipfs/localIpfs.js"
+    }
   }
 }
