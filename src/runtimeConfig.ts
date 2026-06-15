@@ -202,7 +202,7 @@ export function getDefaultMessengerRuntimeConfig(): MessengerRuntimeConfig {
     inferred.chainId
   );
 
-  const known = getKnownChainMetadata(chainId) || inferred;
+  const known = inferred || getKnownChainMetadata(chainId);
 
   const appNetwork =
     cleanString(import.meta.env.VITE_APP_NETWORK) || known.appNetwork;
