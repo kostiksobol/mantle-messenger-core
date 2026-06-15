@@ -41,19 +41,16 @@ export type SavedMessengerRuntimeContext = {
 export const MESSENGER_RUNTIME_CONFIG_STORAGE_KEY =
   "mantle-messenger:runtime-config:v1";
 
-export const MESSENGER_RUNTIME_CONFIG_SESSION_KEY =
-  "mantle-messenger:runtime-config-session:v1";
-
 export const MESSENGER_RUNTIME_CONTEXTS_STORAGE_KEY =
   "mantle-messenger:runtime-contexts:v1";
 
-function readSessionOverride(): MessengerRuntimeConfigOverride | undefined {
-  if (typeof sessionStorage === "undefined") {
+function readStorage(): MessengerRuntimeConfigOverride | undefined {
+  if (typeof localStorage === "undefined") {
     return undefined;
   }
 
   try {
-    const raw = sessionStorage.getItem(MESSENGER_RUNTIME_CONFIG_SESSION_KEY);
+    const raw = localStorage.getItem(MESSENGER_RUNTIME_CONFIG_STORAGE_KEY);
     return raw ? JSON.parse(raw) : undefined;
   } catch {
     return undefined;
@@ -130,117 +127,95 @@ export function getKnownChainMetadata(chainId: number) {
   return known[chainId];
 }
 
-function inferChainIdFromRpcUrl(rpcUrl: string) {
-  const value = rpcUrl.toLowerCase();
+export function getDefaultMessengerRuntimeConfig(): MessengerRuntimeConfig {
+  const appNetwork = cleanString(import.meta.env.VITE_APP_NETWORK) || "anvil";
 
-  if (
-    value.includes("127.0.0.1") ||
-    value.includes("localhost") ||
-    value.includes("0.0.0.0") ||
-    value.includes("anvil")
-  ) {
-    return 31337;
-  }
+  const chainId = cleanNumber(
+    import.meta.env.VITE_CHAIN_ID ?? import.meta.env.VITE_APP_CHAIN_ID,
+    appNetwork.includes("mantle") ? 5003 : 31337
+  );
 
-  if (value.includes("mantle")) {
-    return 5003;
-  }
+  const known = getKnownChainMetadata(chainId);
 
-  return 5003;
-}
-
-function configFromParts(args: {
-  rpcUrl: string;
-  mainConnectorAddress: Address | "";
-  chainId: number;
-  chainName?: string;
-  nativeCurrencyName?: string;
-  nativeCurrencySymbol?: string;
-  nativeCurrencyDecimals?: number;
-  appNetwork?: string;
-}): MessengerRuntimeConfig {
-  const known = getKnownChainMetadata(args.chainId);
+  const nativeCurrencySymbol =
+    cleanString(import.meta.env.VITE_NATIVE_CURRENCY_SYMBOL) ||
+    known?.nativeCurrencySymbol ||
+    (appNetwork.includes("mantle") ? "MNT" : "ETH");
 
   return {
-    appNetwork:
-      cleanString(args.appNetwork) ||
-      known?.appNetwork ||
-      `chain-${args.chainId}`,
-    chainId: args.chainId,
+    appNetwork,
+    chainId,
     chainName:
-      cleanString(args.chainName) ||
+      cleanString(import.meta.env.VITE_CHAIN_NAME) ||
       known?.chainName ||
-      `Unknown chain ${args.chainId}`,
-    rpcUrl: args.rpcUrl,
-    mainConnectorAddress: args.mainConnectorAddress,
+      (appNetwork.includes("mantle") ? "Mantle Sepolia" : "Anvil"),
+    rpcUrl:
+      cleanString(import.meta.env.VITE_RPC_URL) ||
+      cleanString(import.meta.env.VITE_APP_RPC_URL) ||
+      "http://127.0.0.1:8545",
+    mainConnectorAddress:
+      (cleanString(import.meta.env.VITE_MAIN_CONNECTOR_ADDRESS) as Address | "") ||
+      "",
     nativeCurrencyName:
-      cleanString(args.nativeCurrencyName) ||
+      cleanString(import.meta.env.VITE_NATIVE_CURRENCY_NAME) ||
       known?.nativeCurrencyName ||
-      "Ether",
-    nativeCurrencySymbol:
-      cleanString(args.nativeCurrencySymbol) ||
-      known?.nativeCurrencySymbol ||
-      "ETH",
+      nativeCurrencySymbol,
+    nativeCurrencySymbol,
     nativeCurrencyDecimals: cleanNumber(
-      args.nativeCurrencyDecimals,
+      import.meta.env.VITE_NATIVE_CURRENCY_DECIMALS,
       known?.nativeCurrencyDecimals || 18
     ),
+    blockExplorerUrl:
+      cleanString(import.meta.env.VITE_BLOCK_EXPLORER_URL) || undefined,
   };
-}
-
-export function getDefaultMessengerRuntimeConfig(): MessengerRuntimeConfig {
-  const rpcUrl =
-    cleanString(import.meta.env.VITE_RPC_URL) ||
-    "https://rpc.sepolia.mantle.xyz";
-
-  const mainConnectorAddress =
-    (cleanString(import.meta.env.VITE_MAIN_CONNECTOR_ADDRESS) as Address | "") ||
-    "";
-
-  return configFromParts({
-    rpcUrl,
-    mainConnectorAddress,
-    chainId: inferChainIdFromRpcUrl(rpcUrl),
-  });
 }
 
 export function getMessengerRuntimeConfig(): MessengerRuntimeConfig {
   const defaults = getDefaultMessengerRuntimeConfig();
-  const override = readSessionOverride();
+  const override = readStorage();
 
   if (!override || typeof override !== "object") {
     return defaults;
   }
 
-  const rpcUrl = cleanString(override.rpcUrl) || defaults.rpcUrl;
-  const chainId = cleanNumber(
-    override.chainId,
-    inferChainIdFromRpcUrl(rpcUrl)
-  );
+  const chainId = cleanNumber(override.chainId, defaults.chainId);
+  const known = getKnownChainMetadata(chainId);
 
-  return configFromParts({
-    rpcUrl,
+  return {
+    ...defaults,
+    appNetwork:
+      cleanString(override.appNetwork) ||
+      known?.appNetwork ||
+      `chain-${chainId}`,
+    chainId,
+    chainName:
+      cleanString(override.chainName) ||
+      known?.chainName ||
+      `Unknown chain ${chainId}`,
+    rpcUrl: cleanString(override.rpcUrl) || defaults.rpcUrl,
     mainConnectorAddress:
       (cleanString(override.mainConnectorAddress) as Address | "") ||
       defaults.mainConnectorAddress,
-    chainId,
-    chainName: override.chainName,
-    nativeCurrencyName: override.nativeCurrencyName,
-    nativeCurrencySymbol: override.nativeCurrencySymbol,
-    nativeCurrencyDecimals: override.nativeCurrencyDecimals,
-    appNetwork: override.appNetwork,
-  });
+    nativeCurrencyName:
+      cleanString(override.nativeCurrencyName) ||
+      known?.nativeCurrencyName ||
+      defaults.nativeCurrencyName,
+    nativeCurrencySymbol:
+      cleanString(override.nativeCurrencySymbol) ||
+      known?.nativeCurrencySymbol ||
+      defaults.nativeCurrencySymbol,
+    nativeCurrencyDecimals: cleanNumber(
+      override.nativeCurrencyDecimals,
+      known?.nativeCurrencyDecimals || defaults.nativeCurrencyDecimals
+    ),
+  };
 }
 
 export function saveMessengerRuntimeConfigOverride(
   override: MessengerRuntimeConfigOverride
 ) {
-  if (typeof sessionStorage === "undefined") {
-    return;
-  }
-
-  sessionStorage.setItem(
-    MESSENGER_RUNTIME_CONFIG_SESSION_KEY,
+  localStorage.setItem(
+    MESSENGER_RUNTIME_CONFIG_STORAGE_KEY,
     JSON.stringify({
       rpcUrl: cleanString(override.rpcUrl),
       mainConnectorAddress:
@@ -260,13 +235,7 @@ export function saveMessengerRuntimeConfig(config: MessengerRuntimeConfig) {
 }
 
 export function resetMessengerRuntimeConfig() {
-  if (typeof sessionStorage !== "undefined") {
-    sessionStorage.removeItem(MESSENGER_RUNTIME_CONFIG_SESSION_KEY);
-  }
-
-  if (typeof localStorage !== "undefined") {
-    localStorage.removeItem(MESSENGER_RUNTIME_CONFIG_STORAGE_KEY);
-  }
+  localStorage.removeItem(MESSENGER_RUNTIME_CONFIG_STORAGE_KEY);
 }
 
 export function makeMessengerRuntimeContextId(args: {
