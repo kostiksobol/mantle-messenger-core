@@ -1,118 +1,139 @@
 # Mantle Messenger Core
 
-TypeScript core package for **Mantle Private Messenger**.
+Reusable TypeScript core for Mantle Messenger.
 
-This package contains the reusable client/protocol layer for the messenger application. It is responsible for local message state, encryption helpers, contract ABI usage, blockchain sync, and high-level messenger write actions.
+This package contains the protocol/client logic used by a private on-chain messenger application. It is not a UI package and it is not a wallet adapter. Instead, it provides the reusable building blocks needed to build a messenger client on top of the Mantle Messenger Solidity contracts.
 
-It is designed to work with the Solidity protocol contracts from:
+## Related repositories
 
-https://github.com/kostiksobol/mantle-messenger-contracts
-
-## What this package is
-
-`@mantle/messenger-core` is the SDK-style core of the messenger.
-
-It does not contain React UI.
-It does not assume a specific wallet extension.
-It does not own private blockchain keys.
-It does not force a specific transaction signer.
-
-Instead, it provides the protocol logic and expects the host application to provide a transaction layer.
-
-## What this package includes
-
-* Contract ABIs and contract helpers
-* Messenger database schema and sync logic
-* Message and chat models
-* Encryption helpers
-* Messenger RSA key helpers
-* Chat invitation encryption/decryption
-* High-level write actions
-* Transaction layer abstraction
-* Runtime configuration helpers
-* IPFS-related helpers
-
-## Relationship with Solidity contracts
-
-This package is built specifically for the Solidity contracts in:
+Solidity contracts:
 
 https://github.com/kostiksobol/mantle-messenger-contracts
 
-The contracts repository contains the canonical on-chain protocol:
+This core package is built for those contracts and expects a compatible deployed `MainConnector` contract.
 
-* `MainConnector`
-* user registry logic
-* messenger user/profile logic
-* chat/message/invitation protocol contracts
-* Foundry scripts
-* Foundry tests
+## What this package does
 
-This TypeScript package expects a deployed `MainConnector` compatible with that protocol.
+`mantle-messenger-core` provides:
 
-When the Solidity contracts change, the ABI/types used by this package must be updated to match the deployed contracts.
-
-## Architecture boundary
-
-The core package intentionally separates protocol logic from application-specific wallet logic.
-
-### Core owns
-
-* protocol data structures
-* crypto helpers
-* local database sync
-* contract ABI usage
+* contract ABIs and helpers
+* local message database logic
+* blockchain sync logic
 * messenger write actions
-* transaction layer interface
+* chat and invitation protocol helpers
+* encryption helpers
+* local messenger RSA key helpers
+* transaction layer types
 
-### Host app owns
+It allows a frontend, agent, or another application to reuse the messenger protocol without duplicating the core logic.
 
-* UI
+## What this package does not do
+
+This package does not provide:
+
+* React components
+* wallet connection UI
 * wallet discovery
-* browser wallet integration
-* local EVM signer integration
-* network switching UI
-* developer configuration UI
-* actual transaction signing implementation
+* CSS or application layout
+* deployment scripts
+* private EVM key management
+* a hosted backend
 
-## Two different key layers
+The consuming application is responsible for wallet connection, UI, network selection, and transaction signing.
 
-This project uses two separate key types.
+## How it fits into the system
 
-### 1. EVM / blockchain key
+The full system has three main layers:
 
-This key signs blockchain transactions.
+```text
+Solidity contracts
+  On-chain registry, users, chats, messages, and invitations
 
-It may live in:
+messenger-core
+  TypeScript protocol logic, local database, crypto helpers, sync, write actions
 
-* Rabby
-* MetaMask
-* SubWallet
-* Talisman
-* another browser wallet
-* a local private key signer
-* a future AI-agent signer
+application
+  UI, wallet connection, transaction signing, network selection
+```
 
-The EVM key is used only for blockchain transaction signing.
+The application connects to a deployed `MainConnector` contract and uses this package to read, sync, and write messenger data.
 
-### 2. Messenger RSA key
+## Installation
 
-This key is used by the messenger protocol for encrypted chat invitations.
+Install directly from GitHub:
 
-It is handled by the messenger core helpers such as:
+```bash
+npm install github:kostiksobol/mantle-messenger-core#main
+```
 
-* `ensureRsaKeyPair(ownerAddress)`
-* `loadRsaKeyPair(ownerAddress)`
+Later this package can also be published to npm.
 
-The RSA key does not sign blockchain transactions.
-The RSA key is not a wallet key.
+## Build
 
-Keeping these two layers separate is important.
+```bash
+npm install
+npm run build
+```
 
-## Transaction layer abstraction
+The build output is generated in `dist`.
+
+## Contracts requirement
+
+This package expects a deployed `MainConnector` contract compatible with:
+
+https://github.com/kostiksobol/mantle-messenger-contracts
+
+A consuming application should know:
+
+* RPC URL
+* chain id
+* deployed `MainConnector` address
+
+The app should also validate that the configured `MainConnector` address actually contains contract bytecode and responds like the expected protocol contract.
+
+## Key concepts
+
+### MainConnector
+
+`MainConnector` is the main on-chain entrypoint for the messenger protocol.
+
+It is used for:
+
+* user registration
+* user lookup
+* protocol contract discovery
+* messenger write operations
+
+The core package uses the ABI expected by the Solidity contracts repository.
+
+### Public client
+
+A public client is used for read-only blockchain operations.
+
+Examples:
+
+* reading user profile data
+* reading chat state
+* syncing events
+* checking contract state
+
+Read operations do not require a wallet signature.
+
+### Transaction layer
 
 The core package does not directly depend on a specific wallet.
 
-Instead, the host application provides a `MessengerTransactionLayer`.
+Instead, the consuming application provides a transaction layer that knows how to send blockchain transactions.
+
+This allows the same core logic to work with:
+
+* browser wallets
+* local private key signers
+* backend signers
+* agent signers
+* future account abstraction flows
+
+The transaction layer interface looks like this:
 
 ```ts
 import type { Address, Hash } from "viem";
@@ -134,18 +155,44 @@ export type MessengerTransactionLayer = {
 };
 ```
 
-This makes the core usable with:
+The application decides how `writeContract` is implemented.
 
-* browser wallets
-* local private key signers
-* server-side signers
-* agent signers
-* custom transaction relayers
-* account abstraction flows in the future
+## Wallet keys and messenger keys
 
-## Typical host application setup
+The messenger uses two different key layers.
 
-A host application usually creates a write context like this:
+### EVM key
+
+The EVM key signs blockchain transactions.
+
+It can come from:
+
+* a browser wallet
+* a local signer
+* an agent signer
+* a backend signer
+
+This key is used only for blockchain transactions.
+
+### Messenger RSA key
+
+The messenger RSA key is used for encrypted messenger invitations.
+
+It is not a wallet key and it does not sign transactions.
+
+The core package includes helpers for loading and creating messenger RSA keys for a user address.
+
+## Typical integration flow
+
+A consuming application usually does the following:
+
+1. Connect or create a user wallet.
+2. Create a viem public client for the selected network.
+3. Create a transaction layer for the active signer.
+4. Configure the deployed `MainConnector` address.
+5. Use messenger-core to register users, sync chats, create chats, send messages, and handle invitations.
+
+Example write context:
 
 ```ts
 import type { MessengerWriteContext } from "@mantle/messenger-core";
@@ -161,21 +208,16 @@ const ctx: MessengerWriteContext = {
 
 Where:
 
-* `ownerAddress` is the active messenger user address
-* `publicClient` is a viem public client for contract reads
-* `transactions` is the app-provided transaction layer
-* `selfProfile` is the current registered messenger profile
+* `ownerAddress` is the active user address
+* `publicClient` is used for contract reads
+* `transactions` is provided by the application
+* `selfProfile` is the registered messenger profile
 * `mainConnectorAddress` is the deployed protocol entrypoint
 
-Contract reads can use `publicClient`.
-
-Contract writes go through `transactions`.
-
-## Browser wallet example
-
-A browser wallet transaction layer can be implemented in the host app:
+## Browser wallet transaction layer example
 
 ```ts
+import type { Address } from "viem";
 import type { MessengerTransactionLayer } from "@mantle/messenger-core";
 
 export function createBrowserWalletTransactions(args: {
@@ -193,9 +235,7 @@ export function createBrowserWalletTransactions(args: {
 }
 ```
 
-## Local signer example
-
-A local signer transaction layer can also be implemented outside the core package:
+## Local signer transaction layer example
 
 ```ts
 import { createWalletClient, http } from "viem";
@@ -227,113 +267,42 @@ export function createLocalSignerTransactions(args: {
 }
 ```
 
-## Installation from GitHub
+## Local database
 
-```bash
-npm install github:kostiksobol/mantle-messenger-core#main
-```
+The core package uses a local IndexedDB database for messenger state.
 
-## Build
+The consuming application should keep different networks and different `MainConnector` deployments separated. This prevents local state from different deployments from being mixed together.
+
+For example, local state for Anvil and Mantle Sepolia should not share the same database namespace.
+
+## Updating contract compatibility
+
+If the Solidity contracts change, the core package must be updated too.
+
+Typical update flow:
+
+1. Change Solidity contracts in the contracts repository.
+2. Deploy or redeploy the contracts.
+3. Update ABI/types in this package.
+4. Test sync and write actions against the new `MainConnector`.
+5. Release or push the updated core package.
+
+## Development
 
 ```bash
 npm install
 npm run build
 ```
 
-The package builds TypeScript into `dist`.
-
-## Package structure
-
-Typical source layout:
-
-```text
-src/
-  chain/
-    transactionLayer.ts
-
-  crypto/
-    ...
-
-  db.ts
-
-  contracts.ts
-
-  localKeys.ts
-
-  messenger/
-    syncer.ts
-    writeActions.ts
-    ...
-
-  runtimeConfig.ts
-
-  index.ts
-```
-
-## Runtime configuration
-
-The package includes runtime configuration helpers for selecting:
-
-* RPC URL
-* chain id
-* chain metadata
-* deployed `MainConnector` address
-* known network contexts
-
-The host app may expose this through a developer UI.
-
-The core package can store runtime overrides in local storage, but the host app decides how users interact with this configuration.
-
-## Local database
-
-The messenger uses a local IndexedDB database through Dexie.
-
-Database namespaces should include network and `MainConnector` identity so that different deployments do not mix local message state.
-
-This is important when switching between:
-
-* local Anvil
-* Mantle Sepolia
-* custom test deployments
-* future production deployments
-
-## Contract compatibility
-
-The package assumes the deployed `MainConnector` supports the protocol expected by the core.
-
-A host app should validate:
-
-* RPC URL is reachable
-* chain id is correct
-* `MainConnector` address has bytecode
-* contract responds like the expected protocol entrypoint
-
-## Publishing model
-
-Currently this package can be used directly from GitHub:
+Commit and push changes:
 
 ```bash
-npm install github:kostiksobol/mantle-messenger-core#main
-```
-
-Later it can be published as an npm package:
-
-```bash
-npm install @mantle/messenger-core
-```
-
-## Development workflow
-
-When changing the core package:
-
-```bash
-npm run build
 git add .
 git commit -m "Update messenger core"
 git push
 ```
 
-Then update the consuming app:
+Update a consuming app:
 
 ```bash
 npm install github:kostiksobol/mantle-messenger-core#main
