@@ -1,4 +1,6 @@
 import {
+
+
   arrayBufferToBase64,
   base64ToArrayBuffer,
   randomBytes,
@@ -19,7 +21,10 @@ function bytesToBase64(bytes: Uint8Array) {
     bytes.byteOffset + bytes.byteLength
   );
 
-  return arrayBufferToBase64(buffer);
+  const view = new Uint8Array(buffer);
+  const copy = new Uint8Array(view.byteLength);
+  copy.set(view);
+  return arrayBufferToBase64(copy.buffer);
 }
 
 async function importFileAesKey(chatKeyBase64: string) {

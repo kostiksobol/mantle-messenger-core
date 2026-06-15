@@ -1,1 +1,0 @@
-{"version":3,"file":"syncer.d.ts","sourceRoot":"","sources":["../src/syncer.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,OAAO,EAAE,YAAY,EAAE,MAAM,MAAM,CAAC;AAyClD,MAAM,MAAM,aAAa,GAAG;IAC1B,YAAY,EAAE,OAAO,CAAC;IACtB,YAAY,EAAE,YAAY,CAAC;IAC3B,oBAAoB,CAAC,EAAE,OAAO,CAAC;CAChC,CAAC;AAUF,wBAAgB,qBAAqB,CAAC,OAAO,EAAE,aAAa,cAI3D"}
