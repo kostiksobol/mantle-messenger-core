@@ -76,17 +76,17 @@ function isAddress(value: unknown): value is Address {
   return typeof value === "string" && /^0x[a-fA-F0-9]{40}$/.test(value);
 }
 
-export function getKnownChainMetadata(chainId: number) {
-  const known: Record<
-    number,
-    {
-      chainName: string;
-      nativeCurrencyName: string;
-      nativeCurrencySymbol: string;
-      nativeCurrencyDecimals: number;
-      appNetwork: string;
-    }
-  > = {
+type KnownChainMetadata = {
+  chainName: string;
+  nativeCurrencyName: string;
+  nativeCurrencySymbol: string;
+  nativeCurrencyDecimals: number;
+  appNetwork: string;
+  blockExplorerUrl?: string;
+};
+
+export function getKnownChainMetadata(chainId: number): KnownChainMetadata | undefined {
+  const known: Record<number, KnownChainMetadata> = {
     1: {
       chainName: "Ethereum",
       nativeCurrencyName: "Ether",
@@ -114,6 +114,7 @@ export function getKnownChainMetadata(chainId: number) {
       nativeCurrencySymbol: "MNT",
       nativeCurrencyDecimals: 18,
       appNetwork: "mantle",
+      blockExplorerUrl: "https://explorer.mantle.xyz",
     },
     5003: {
       chainName: "Mantle Sepolia",
@@ -121,52 +122,116 @@ export function getKnownChainMetadata(chainId: number) {
       nativeCurrencySymbol: "MNT",
       nativeCurrencyDecimals: 18,
       appNetwork: "mantle-sepolia",
+      blockExplorerUrl: "https://explorer.sepolia.mantle.xyz",
     },
   };
 
   return known[chainId];
 }
 
+function inferRuntimeMetadataFromRpcUrl(rpcUrl: string): KnownChainMetadata & {
+  chainId: number;
+} {
+  const value = rpcUrl.toLowerCase();
+
+  if (
+    value.includes("127.0.0.1") ||
+    value.includes("localhost") ||
+    value.includes("0.0.0.0") ||
+    value.includes("anvil")
+  ) {
+    return {
+      chainId: 31337,
+      chainName: "Anvil",
+      nativeCurrencyName: "Ether",
+      nativeCurrencySymbol: "ETH",
+      nativeCurrencyDecimals: 18,
+      appNetwork: "anvil",
+    };
+  }
+
+  if (
+    value.includes("sepolia.mantle") ||
+    value.includes("mantle-sepolia") ||
+    value.includes("5003")
+  ) {
+    return {
+      chainId: 5003,
+      chainName: "Mantle Sepolia",
+      nativeCurrencyName: "Mantle",
+      nativeCurrencySymbol: "MNT",
+      nativeCurrencyDecimals: 18,
+      appNetwork: "mantle-sepolia",
+      blockExplorerUrl: "https://explorer.sepolia.mantle.xyz",
+    };
+  }
+
+  if (value.includes("mantle")) {
+    return {
+      chainId: 5000,
+      chainName: "Mantle",
+      nativeCurrencyName: "Mantle",
+      nativeCurrencySymbol: "MNT",
+      nativeCurrencyDecimals: 18,
+      appNetwork: "mantle",
+      blockExplorerUrl: "https://explorer.mantle.xyz",
+    };
+  }
+
+  return {
+    chainId: 5003,
+    chainName: "Mantle Sepolia",
+    nativeCurrencyName: "Mantle",
+    nativeCurrencySymbol: "MNT",
+    nativeCurrencyDecimals: 18,
+    appNetwork: "mantle-sepolia",
+    blockExplorerUrl: "https://explorer.sepolia.mantle.xyz",
+  };
+}
+
 export function getDefaultMessengerRuntimeConfig(): MessengerRuntimeConfig {
-  const appNetwork = cleanString(import.meta.env.VITE_APP_NETWORK) || "anvil";
+  const rpcUrl =
+    cleanString(import.meta.env.VITE_RPC_URL) ||
+    cleanString(import.meta.env.VITE_APP_RPC_URL) ||
+    "http://127.0.0.1:8545";
+
+  const inferred = inferRuntimeMetadataFromRpcUrl(rpcUrl);
 
   const chainId = cleanNumber(
     import.meta.env.VITE_CHAIN_ID ?? import.meta.env.VITE_APP_CHAIN_ID,
-    appNetwork.includes("mantle") ? 5003 : 31337
+    inferred.chainId
   );
 
-  const known = getKnownChainMetadata(chainId);
+  const known = getKnownChainMetadata(chainId) || inferred;
+
+  const appNetwork =
+    cleanString(import.meta.env.VITE_APP_NETWORK) || known.appNetwork;
 
   const nativeCurrencySymbol =
     cleanString(import.meta.env.VITE_NATIVE_CURRENCY_SYMBOL) ||
-    known?.nativeCurrencySymbol ||
-    (appNetwork.includes("mantle") ? "MNT" : "ETH");
+    known.nativeCurrencySymbol;
 
   return {
     appNetwork,
     chainId,
     chainName:
-      cleanString(import.meta.env.VITE_CHAIN_NAME) ||
-      known?.chainName ||
-      (appNetwork.includes("mantle") ? "Mantle Sepolia" : "Anvil"),
-    rpcUrl:
-      cleanString(import.meta.env.VITE_RPC_URL) ||
-      cleanString(import.meta.env.VITE_APP_RPC_URL) ||
-      "http://127.0.0.1:8545",
+      cleanString(import.meta.env.VITE_CHAIN_NAME) || known.chainName,
+    rpcUrl,
     mainConnectorAddress:
       (cleanString(import.meta.env.VITE_MAIN_CONNECTOR_ADDRESS) as Address | "") ||
       "",
     nativeCurrencyName:
       cleanString(import.meta.env.VITE_NATIVE_CURRENCY_NAME) ||
-      known?.nativeCurrencyName ||
-      nativeCurrencySymbol,
+      known.nativeCurrencyName,
     nativeCurrencySymbol,
     nativeCurrencyDecimals: cleanNumber(
       import.meta.env.VITE_NATIVE_CURRENCY_DECIMALS,
-      known?.nativeCurrencyDecimals || 18
+      known.nativeCurrencyDecimals
     ),
     blockExplorerUrl:
-      cleanString(import.meta.env.VITE_BLOCK_EXPLORER_URL) || undefined,
+      cleanString(import.meta.env.VITE_BLOCK_EXPLORER_URL) ||
+      known.blockExplorerUrl ||
+      undefined,
   };
 }
 
